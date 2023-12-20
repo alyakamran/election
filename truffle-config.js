@@ -8,12 +8,13 @@ module.exports = {
       network_id: "*" // Match any network id
     }
   },
-
   compilers: {
     solc: {
-      version: "0.4.20" // or "^0.4.2" depending on your pragma version
+      version: '0.8.0',
+      optimizer: {
+        enabled: true,
+        runs: 200
+      }
     }
   }
-
-  
 };
