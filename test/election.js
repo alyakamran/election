@@ -1,89 +1,76 @@
-var Election = artifacts.require("./Election.sol");
+const Election = artifacts.require("Election");
 
 contract("Election", function(accounts) {
-  var electionInstance;
+  let electionInstance;
 
-  it("initializes with two candidates", function() {
-    return Election.deployed().then(function(instance) {
-      return instance.candidatesCount();
-    }).then(function(count) {
-      assert.equal(count, 2);
-    });
+  beforeEach(async () => {
+    electionInstance = await Election.deployed();
   });
 
-  it("it initializes the candidates with the correct values", function() {
-    return Election.deployed().then(function(instance) {
-      electionInstance = instance;
-      return electionInstance.candidates(1);
-    }).then(function(candidate) {
-      assert.equal(candidate[0], 1, "contains the correct id");
-      assert.equal(candidate[1], "Candidate 1", "contains the correct name");
-      assert.equal(candidate[2], 0, "contains the correct votes count");
-      return electionInstance.candidates(2);
-    }).then(function(candidate) {
-      assert.equal(candidate[0], 2, "contains the correct id");
-      assert.equal(candidate[1], "Candidate 2", "contains the correct name");
-      assert.equal(candidate[2], 0, "contains the correct votes count");
-    });
+  it("initializes with two candidates", async () => {
+    const count = await electionInstance.getCandidateCount();
+    assert.equal(count, 2);
   });
 
-  it("allows a voter to cast a vote", function() {
-    return Election.deployed().then(function(instance) {
-      electionInstance = instance;
-      candidateId = 1;
-      return electionInstance.vote(candidateId, { from: accounts[0] });
-    }).then(function(receipt) {
-      assert.equal(receipt.logs.length, 1, "an event was triggered");
-      assert.equal(receipt.logs[0].event, "votedEvent", "the event type is correct");
-      assert.equal(receipt.logs[0].args._candidateId.toNumber(), candidateId, "the candidate id is correct");
-      return electionInstance.voters(accounts[0]);
-    }).then(function(voted) {
-      assert(voted, "the voter was marked as voted");
-      return electionInstance.candidates(candidateId);
-    }).then(function(candidate) {
-      var voteCount = candidate[2];
-      assert.equal(voteCount, 1, "increments the candidate's vote count");
-    })
+  it("initializes the candidates with the correct values", async () => {
+    const candidate1 = await electionInstance.getCandidate(1);
+    assert.equal(candidate1.id, 1, "contains the correct id");
+    assert.equal(candidate1.name, "Candidate 1", "contains the correct name");
+    assert.equal(candidate1.voteCount, 0, "contains the correct votes count");
+
+    const candidate2 = await electionInstance.getCandidate(2);
+    assert.equal(candidate2.id, 2, "contains the correct id");
+    assert.equal(candidate2.name, "Candidate 2", "contains the correct name");
+    assert.equal(candidate2.voteCount, 0, "contains the correct votes count");
   });
 
-  it("throws an exception for invalid candiates", function() {
-    return Election.deployed().then(function(instance) {
-      electionInstance = instance;
-      return electionInstance.vote(99, { from: accounts[1] })
-    }).then(assert.fail).catch(function(error) {
+  it("allows a voter to cast a vote", async () => {
+    const candidateId = 1;
+    const receipt = await electionInstance.vote(candidateId, { from: accounts[0] });
+    assert.equal(receipt.logs.length, 1, "an event was triggered");
+    assert.equal(receipt.logs[0].event, "VotedEvent", "the event type is correct");
+    assert.equal(receipt.logs[0].args._candidateId.toNumber(), candidateId, "the candidate id is correct");
+
+    const voted = await electionInstance.voters(accounts[0]);
+    assert(voted, "the voter was marked as voted");
+
+    const candidate = await electionInstance.getCandidate(candidateId);
+    assert.equal(candidate.voteCount, 1, "increments the candidate's vote count");
+  });
+
+  it("throws an exception for invalid candidates", async () => {
+    try {
+      await electionInstance.vote(99, { from: accounts[1] });
+      assert.fail("Expected an exception");
+    } catch (error) {
       assert(error.message.indexOf('revert') >= 0, "error message must contain revert");
-      return electionInstance.candidates(1);
-    }).then(function(candidate1) {
-      var voteCount = candidate1[2];
-      assert.equal(voteCount, 1, "candidate 1 did not receive any votes");
-      return electionInstance.candidates(2);
-    }).then(function(candidate2) {
-      var voteCount = candidate2[2];
-      assert.equal(voteCount, 0, "candidate 2 did not receive any votes");
-    });
+
+      const candidate1 = await electionInstance.getCandidate(1);
+      assert.equal(candidate1.voteCount, 1, "candidate 1 did not receive any votes");
+
+      const candidate2 = await electionInstance.getCandidate(2);
+      assert.equal(candidate2.voteCount, 0, "candidate 2 did not receive any votes");
+    }
   });
 
-  it("throws an exception for double voting", function() {
-    return Election.deployed().then(function(instance) {
-      electionInstance = instance;
-      candidateId = 2;
-      electionInstance.vote(candidateId, { from: accounts[1] });
-      return electionInstance.candidates(candidateId);
-    }).then(function(candidate) {
-      var voteCount = candidate[2];
-      assert.equal(voteCount, 1, "accepts first vote");
-      // Try to vote again
-      return electionInstance.vote(candidateId, { from: accounts[1] });
-    }).then(assert.fail).catch(function(error) {
+  it("throws an exception for double voting", async () => {
+    const candidateId = 2;
+    await electionInstance.vote(candidateId, { from: accounts[1] });
+
+    const candidate = await electionInstance.getCandidate(candidateId);
+    assert.equal(candidate.voteCount, 1, "accepts first vote");
+
+    try {
+      await electionInstance.vote(candidateId, { from: accounts[1] });
+      assert.fail("Expected an exception");
+    } catch (error) {
       assert(error.message.indexOf('revert') >= 0, "error message must contain revert");
-      return electionInstance.candidates(1);
-    }).then(function(candidate1) {
-      var voteCount = candidate1[2];
-      assert.equal(voteCount, 1, "candidate 1 did not receive any votes");
-      return electionInstance.candidates(2);
-    }).then(function(candidate2) {
-      var voteCount = candidate2[2];
-      assert.equal(voteCount, 1, "candidate 2 did not receive any votes");
-    });
+
+      const candidate1 = await electionInstance.getCandidate(1);
+      assert.equal(candidate1.voteCount, 1, "candidate 1 did not receive any votes");
+
+      const candidate2 = await electionInstance.getCandidate(2);
+      assert.equal(candidate2.voteCount, 1, "candidate 2 did not receive any votes");
+    }
   });
 });

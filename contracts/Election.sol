@@ -1,51 +1,80 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.0;
+pragma solidity ^0.8;
 
 contract Election {
-    // Model a Candidate
+    address public admin; // Election Commission
+
     struct Candidate {
         uint id;
         string name;
         uint voteCount;
     }
 
-    // Store accounts that have voted
     mapping(address => bool) public voters;
-    // Store Candidates
-    // Fetch Candidate
     mapping(uint => Candidate) public candidates;
-    // Store Candidates Count
     uint public candidatesCount;
 
-    // voted event
-    event votedEvent (
-        uint indexed _candidateId
-    );
+    event VotedEvent(uint indexed candidateId);
 
-     constructor () public {
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin can perform this operation");
+        _;
+    }
+
+    modifier hasNotVoted() {
+        require(!voters[msg.sender], "You have already voted");
+        _;
+    }
+
+    constructor () {
+        admin = msg.sender;
         addCandidate("Candidate 1");
         addCandidate("Candidate 2");
     }
 
-    function addCandidate (string memory _name) private {
-        candidatesCount ++;
+    function addCandidate(string memory _name) public onlyAdmin {
+        candidatesCount++;
         candidates[candidatesCount] = Candidate(candidatesCount, _name, 0);
     }
 
-    function vote (uint _candidateId) public {
-        // require that they haven't voted before
-        require(!voters[msg.sender]);
-
-        // require a valid candidate
-        require(_candidateId > 0 && _candidateId <= candidatesCount);
-
-        // record that voter has voted
+    function registerVoter() public {
+        require(!voters[msg.sender], "You are already registered");
         voters[msg.sender] = true;
+    }
 
-        // update candidate vote Count
-        candidates[_candidateId].voteCount ++;
+    function vote(uint _candidateId) public hasNotVoted {
+        require(_candidateId > 0 && _candidateId <= candidatesCount, "Invalid candidate ID");
+        candidates[_candidateId].voteCount++;
+        voters[msg.sender] = true;
+        emit VotedEvent(_candidateId);
+    }
 
-        // trigger voted event
-        emit votedEvent(_candidateId);
+    function getCandidateCount() public view returns (uint) {
+        return candidatesCount;
+    }
+
+    function getCandidate(uint _candidateId) public view returns (uint, string memory, uint) {
+        require(_candidateId > 0 && _candidateId <= candidatesCount, "Invalid candidate ID");
+        Candidate storage candidate = candidates[_candidateId];
+        return (candidate.id, candidate.name, candidate.voteCount);
+    }
+
+    function getVotesForCandidate(uint _candidateId) public view returns (uint) {
+        require(_candidateId > 0 && _candidateId <= candidatesCount, "Invalid candidate ID");
+        return candidates[_candidateId].voteCount;
+    }
+
+    function findWinner() public view returns (uint, string memory, uint) {
+        uint winnerId;
+        uint maxVotes = 0;
+
+        for (uint i = 1; i <= candidatesCount; i++) {
+            if (candidates[i].voteCount > maxVotes) {
+                maxVotes = candidates[i].voteCount;
+                winnerId = i;
+            }
+        }
+
+        return (candidates[winnerId].id, candidates[winnerId].name, candidates[winnerId].voteCount);
     }
 }
